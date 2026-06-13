@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Robotics Team Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f8f8f6; --surface: #ffffff; --surface2: #f2f2ef;
+    --border: rgba(0,0,0,0.09); --border-strong: rgba(0,0,0,0.15);
+    --text: #1a1a18; --text2: #6b6b66; --text3: #a0a09a;
+    --blue-bg: #E6F1FB; --blue-text: #185FA5;
+    --green-bg: #E1F5EE; --green-text: #0F6E56;
+    --amber-bg: #FAEEDA; --amber-text: #854F0B;
+    --pink-bg: #FBEAF0; --pink-text: #993556;
+    --purple-bg: #EEEDFE; --purple-text: #534AB7;
+    --teal-bg: #EAF3DE; --teal-text: #3B6D11;
+    --coral-bg: #FAECE7; --coral-text: #993C1D;
+    --red-bg: #FCEBEB; --red-text: #A32D2D;
+    --radius: 10px; --radius-sm: 6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #181816; --surface: #222220; --surface2: #2a2a28;
+      --border: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.14);
+      --text: #f0f0ec; --text2: #9a9a94; --text3: #5a5a55;
+      --blue-bg: #0c2a44; --blue-text: #85B7EB;
+      --green-bg: #052e20; --green-text: #5DCAA5;
+      --amber-bg: #2e1e04; --amber-text: #FAC775;
+      --pink-bg: #2e0f1a; --pink-text: #ED93B1;
+      --purple-bg: #1c1640; --purple-text: #AFA9EC;
+      --teal-bg: #0e2210; --teal-text: #97C459;
+      --coral-bg: #2e1008; --coral-text: #F0997B;
+      --red-bg: #2e0e0e; --red-text: #F09595;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.5; }
+  .page { max-width: 980px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* Header */
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 12px; }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .header-icon { width: 34px; height: 34px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .header-icon svg { width: 18px; height: 18px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .header h1 { font-size: 17px; font-weight: 600; color: var(--text); }
+  .header-sub { font-size: 12px; color: var(--text3); margin-top: 1px; }
+  .badge { font-size: 11px; border-radius: 99px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 4px; }
+  .badge-live { background: var(--green-bg); color: var(--green-text); }
+  .badge-warn { background: var(--amber-bg); color: var(--amber-text); }
+  .badge-loading { background: var(--blue-bg); color: var(--blue-text); }
+
+  /* Team selector */
+  .team-selector { display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .team-btn { font-size: 13px; padding: 7px 18px; border-radius: 99px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text2); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .team-btn:hover { background: var(--surface2); }
+  .team-btn.active { border-color: transparent; }
+  .team-btn .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* Metrics */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.9rem 1rem; }
+  .metric-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .metric-value { font-size: 22px; font-weight: 600; color: var(--text); line-height: 1; }
+  .metric-sub { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
+  .tab { font-size: 13px; padding: 7px 16px; border: none; background: transparent; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { border-bottom-color: currentColor; font-weight: 500; }
+
+  /* Table */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  thead th { padding: 9px 12px; text-align: left; font-size: 11px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); background: var(--surface2); cursor: pointer; user-select: none; }
+  thead th:hover { color: var(--text); }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr.mr { cursor: pointer; }
+  tbody tr.mr:hover { background: var(--surface2); }
+  td { padding: 9px 12px; vertical-align: middle; color: var(--text); }
+
+  /* Avatar */
+  .avatar { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+  .name-cell { display: flex; align-items: center; gap: 8px; }
+
+  /* Progress */
+  .progress-bg { background: var(--surface2); border-radius: 99px; height: 5px; width: 100%; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; }
+  .pct-label { font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+  /* Pills */
+  .pill { font-size: 10px; border-radius: 99px; padding: 2px 7px; display: inline-block; }
+  .tag-pill { font-size: 10px; border-radius: 4px; padding: 2px 6px; display: inline-block; margin-right: 2px; }
+
+  /* Filter row */
+  .filter-row { display: flex; gap: 6px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+  .filter-btn { font-size: 12px; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--border-strong); background: transparent; color: var(--text2); cursor: pointer; transition: all 0.15s; }
+  .filter-btn:hover { background: var(--surface2); }
+  .filter-btn.active { color: var(--text); border-color: transparent; }
+
+  /* Detail panel */
+  .detail-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-top: 1rem; overflow: hidden; animation: slideDown 0.15s ease; }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+  .detail-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); background: var(--surface2); }
+  .detail-header-left { display: flex; align-items: center; gap: 12px; }
+  .detail-av { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+  .detail-name { font-size: 15px; font-weight: 600; color: var(--text); }
+  .detail-email { font-size: 12px; color: var(--text3); margin-top: 1px; }
+  .detail-close { background: none; border: 1px solid var(--border-strong); border-radius: 99px; color: var(--text2); font-size: 12px; padding: 4px 12px; cursor: pointer; }
+  .detail-close:hover { background: var(--surface); }
+  .detail-body { padding: 1.25rem; }
+  .detail-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin-bottom: 1.25rem; }
+  .detail-stat { background: var(--surface2); border-radius: var(--radius-sm); padding: 0.65rem 0.8rem; }
+  .detail-stat-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
+  .detail-stat-value { font-size: 20px; font-weight: 600; color: var(--text); line-height: 1; }
+  .section-title { font-size: 11px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .bar-label { font-size: 11px; color: var(--text2); width: 55px; flex-shrink: 0; }
+  .bar-track { flex: 1; background: var(--surface2); border-radius: 99px; height: 6px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 99px; }
+  .bar-count { font-size: 11px; color: var(--text3); width: 18px; text-align: right; flex-shrink: 0; }
+  .task-list { display: flex; flex-direction: column; gap: 5px; }
+  .task-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: var(--surface2); border-radius: var(--radius-sm); border: 1px solid var(--border); }
+  .task-item:hover { border-color: var(--border-strong); }
+  .task-name { font-size: 12px; color: var(--text); text-decoration: none; font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task-name:hover { color: var(--blue-text); }
+  .task-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: 8px; }
+  .notice { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; text-align: center; color: var(--text2); font-size: 13px; line-height: 1.7; }
+  .notice strong { color: var(--text); display: block; font-size: 15px; margin-bottom: 6px; }
+  .member-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+  .member-chip { display: flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border); border-radius: 99px; padding: 4px 12px 4px 6px; }
+  .cat-link { font-size: 11px; color: var(--text2); text-decoration: none; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; display: inline-block; }
+  .cat-link:hover { color: var(--text); }
+  .loading-state { text-align: center; padding: 3rem; color: var(--text3); font-size: 13px; }
+  .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--blue-text); border-radius: 50%; animation: spin 0.7s linear infinite; margin-bottom: 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .refresh-btn { font-size: 12px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text2); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.15s; }
+  .refresh-btn:hover { background: var(--surface2); }
+  .footer { margin-top: 2.5rem; text-align: center; font-size: 11px; color: var(--text3); }
+  .footer a { color: var(--text3); text-decoration: none; }
+  .footer a:hover { color: var(--text2); }
+  .unassigned-note { margin-top: 10px; padding: 10px 14px; background: var(--surface2); border-radius: var(--radius-sm); font-size: 12px; color: var(--text2); }
+
+  /* Token modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+  .modal { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 2rem; max-width: 440px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+  .modal h2 { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .modal p { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 1.25rem; }
+  .modal input { width: 100%; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface2); color: var(--text); font-size: 13px; font-family: monospace; outline: none; margin-bottom: 1rem; }
+  .modal input:focus { border-color: var(--blue-text); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn-primary { font-size: 13px; padding: 7px 18px; border-radius: 99px; border: none; background: var(--blue-text); color: #fff; cursor: pointer; font-weight: 500; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost { font-size: 13px; padding: 7px 14px; border-radius: 99px; border: 1px solid var(--border-strong); background: transparent; color: var(--text2); cursor: pointer; }
+  .btn-ghost:hover { background: var(--surface2); }
+  .token-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--amber-bg); border: 1px solid var(--amber-text); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .token-banner span { font-size: 13px; color: var(--amber-text); }
+  .token-set-btn { font-size: 12px; padding: 5px 14px; border-radius: 99px; border: 1px solid var(--amber-text); background: transparent; color: var(--amber-text); cursor: pointer; white-space: nowrap; font-weight: 500; }
+  .token-set-btn:hover { background: var(--amber-text); color: #fff; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="header-left">
+      <div class="header-icon" id="headerIcon" style="background:var(--blue-bg)">
+        <svg viewBox="0 0 24 24" id="headerSvg" style="stroke:var(--blue-text)"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <div>
+        <h1 id="headerTitle">Robotics Team Dashboard</h1>
+        <div class="header-sub" id="headerSub">Select a team to get started</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="badge badge-loading" id="statusBadge">● Ready</span>
+      <button class="refresh-btn" onclick="openTokenModal()" id="tokenBtn" title="Set API token">🔑 Token</button>
+      <button class="refresh-btn" onclick="refresh()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div id="tokenBanner" style="display:none" class="token-banner">
+    <span>🔑 No ClickUp API token set — data won't load without it.</span>
+    <button class="token-set-btn" onclick="openTokenModal()">Set API token</button>
+  </div>
+
+  <div class="team-selector" id="teamSelector"></div>
+
+  <!-- Token modal -->
+  <div class="modal-backdrop" id="tokenModal" style="display:none" onclick="handleBackdropClick(event)">
+    <div class="modal">
+      <h2>🔑 ClickUp API Token</h2>
+      <p>Your token is stored only in your browser (localStorage) and never sent anywhere except directly to ClickUp's API.</p>
+      <p>Get yours: <strong>ClickUp → Avatar → Settings → Apps → API Token</strong></p>
+      <input type="password" id="tokenInput" placeholder="pk_xxxxxxxxxxxx" autocomplete="off" />
+      <div class="modal-actions">
+        <button class="btn-ghost" id="modalCancelBtn" onclick="closeTokenModal()">Cancel</button>
+        <button class="btn-primary" onclick="saveToken()">Save &amp; connect</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mainContent">
+    <div class="loading-state" style="padding:4rem;color:var(--text3)">
+      <div style="font-size:28px;margin-bottom:10px">🤖</div>
+      Select a team above to load their dashboard
+    </div>
+  </div>
+
+  <div class="footer">
+    Last refreshed: <span id="lastRefresh">—</span> ·
+    <a href="https://app.clickup.com" target="_blank">Open ClickUp ↗</a>
+  </div>
+</div>
+
+<script>
+let CLICKUP_TOKEN = localStorage.getItem('clickup_token') || '';
+
+const TEAMS = {
+  electrical: {
+    label: 'Electrical',
+    spaceId: '90144940619',
+    listIds: ['901415194773'],
+    color: '#185FA5', bg: '#E6F1FB',
+    dot: '#3266ad',
+    icon: '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>',
+  },
+  mechanical: {
+    label: 'Mechanical',
+    spaceId: '90144940703',
+    listIds: ['901415194902'],
+    color: '#0F6E56', bg: '#E1F5EE',
+    dot: '#1D9E75',
+    icon: '<circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M20 12h2M2 12h2M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41"/>',
+  },
+  software: {
+    label: 'Software',
+    spaceId: '90144940722',
+    listIds: ['901415194930'],
+    color: '#534AB7', bg: '#EEEDFE',
+    dot: '#7F77DD',
+    icon: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+  },
+  science: {
+    label: 'Science',
+    spaceId: '90144940738',
+    listIds: ['901415194954','901417109365'],
+    color: '#854F0B', bg: '#FAEEDA',
+    dot: '#EF9F27',
+    icon: '<path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>',
+  },
+};
+
+const AVATAR_COLORS = [
+  {bg:'#E6F1FB',c:'#185FA5'},{bg:'#E1F5EE',c:'#0F6E56'},
+  {bg:'#FAEEDA',c:'#854F0B'},{bg:'#FBEAF0',c:'#993556'},
+  {bg:'#EEEDFE',c:'#534AB7'},{bg:'#EAF3DE',c:'#3B6D11'},
+  {bg:'#FAECE7',c:'#993C1D'},{bg:'#F1EFE8',c:'#5F5E5A'},
+  {bg:'#FCEBEB',c:'#A32D2D'},{bg:'#E6F1FB',c:'#0C447C'},
+  {bg:'#EAF3DE',c:'#27500A'},
+];
+
+// Fallback space→member mapping (auto-detected from tasks at runtime, supplemented here)
+// This gets built dynamically from task assignees — no manual config needed
+const SPACE_MEMBER_FALLBACK = {
+  electrical:  [106233721, 106233722],   // detected from assigned tasks
+  mechanical:  [100234114],
+  software:    [106233723, 106232823],
+  science:     [],
+};
+
+let state = {
+  currentTeam: null,
+  allMembers: [],        // from workspace members API
+  spaceMemberIds: {},    // teamKey → Set of member IDs (built from task assignees + space API)
+  tasks: {},             // teamKey → []
+  loaded: {},            // teamKey → bool
+  openMemberId: null,
+  currentFilter: 'all',
+  sortKey: null, sortAsc: true,
+  currentTab: 'members',
+};
+
+function ini(name) {
+  const p = name.split(/[\s@]/);
+  return (p[0][0] + (p[1] ? p[1][0] : '')).toUpperCase();
+}
+
+function pct(m) { return m.assigned ? Math.round(m.done / m.assigned * 100) : 0; }
+function barColor(p) { return p >= 80 ? '#1D9E75' : p >= 50 ? '#3266ad' : '#EF9F27'; }
+function isOverdue(t) { return t.due_date && Number(t.due_date) < Date.now() && !isDone(t); }
+function isDone(t) { return ['complete','closed','done'].some(s => (t.status||'').toLowerCase().includes(s)); }
+function isActive(t) { return !isDone(t) && ['in progress','active','in review','planned'].some(s => (t.status||'').toLowerCase().includes(s)); }
+
+function statusPill(t, teamColor) {
+  const c = isDone(t) ? {bg:'#E1F5EE',c:'#0F6E56'} : isActive(t) ? {bg:'#E6F1FB',c:'#185FA5'} : {bg:'var(--surface2)',c:'var(--text2)'};
+  return `<span class="pill" style="background:${c.bg};color:${c.c}">${t.status}</span>`;
+}
+
+function buildMemberStats(teamKey) {
+  const tasks = state.tasks[teamKey] || [];
+  const memberIds = state.spaceMemberIds[teamKey] || new Set();
+  const map = {};
+
+  // Init all members of this space
+  state.allMembers.forEach((m, i) => {
+    if (memberIds.has(m.id)) {
+      map[m.id] = { ...m, idx: i, assigned: 0, done: 0, inProgress: 0, todo: 0, overdue: 0 };
+    }
+  });
+
+  tasks.forEach(t => {
+    (t.assignees || []).forEach(a => {
+      if (!map[a.id]) {
+        // assignee exists in tasks but not yet in our space members set — add them
+        const member = state.allMembers.find(m => m.id === a.id);
+        if (member) {
+          const idx = state.allMembers.findIndex(m => m.id === a.id);
+          map[a.id] = { ...member, idx, assigned: 0, done: 0, inProgress: 0, todo: 0, overdue: 0 };
+          state.spaceMemberIds[teamKey].add(a.id);
+        }
+      }
+      if (!map[a.id]) return;
+      map[a.id].assigned++;
+      if (isDone(t)) map[a.id].done++;
+      else if (isActive(t)) map[a.id].inProgress++;
+      else map[a.id].todo++;
+      if (isOverdue(t)) map[a.id].overdue++;
+    });
+  });
+  return Object.values(map);
+}
+
+// Build team selector
+function buildTeamSelector() {
+  const el = document.getElementById('teamSelector');
+  el.innerHTML = Object.entries(TEAMS).map(([key, team]) => `
+    <button class="team-btn" id="tbtn-${key}" onclick="selectTeam('${key}')">
+      <span class="dot" style="background:${team.dot}"></span>
+      ${team.label}
+    </button>`).join('');
+}
+
+async function fetchSpaceMembers(spaceId) {
+  if (!CLICKUP_TOKEN) return [];
+  try {
+    const res = await fetch(`https://api.clickup.com/api/v2/space/${spaceId}/member`, {
+      headers: { Authorization: CLICKUP_TOKEN }
+    });
+    const data = await res.json();
+    // ClickUp returns { members: [ { user: {...} } ] } or { members: [{id,username,...}] }
+    return (data.members || []).map(m => {
+      const u = m.user || m;
+      return { id: u.id, name: u.username || u.email || String(u.id), email: u.email || '' };
+    });
+  } catch (e) { console.error('fetchSpaceMembers error:', e); return []; }
+}
+
+async function fetchTasks(listIds) {
+  if (!CLICKUP_TOKEN) return [];
+  try {
+    const results = await Promise.all(listIds.map(lid =>
+      fetch(`https://api.clickup.com/api/v2/list/${lid}/task?include_closed=true&subtasks=true`, {
+        headers: { Authorization: CLICKUP_TOKEN }
+      }).then(r => r.json()).then(d => d.tasks || [])
+    ));
+    return results.flat();
+  } catch { return []; }
+}
+
+async function fetchWorkspaceMembers() {
+  if (!CLICKUP_TOKEN) return [];
+  try {
+    const res = await fetch('https://api.clickup.com/api/v2/team', {
+      headers: { Authorization: CLICKUP_TOKEN }
+    });
+    const data = await res.json();
+    return (data.teams?.[0]?.members || []).map(m => m.user);
+  } catch { return []; }
+}
+
+async function selectTeam(key) {
+  state.currentTeam = key;
+  state.openMemberId = null;
+  state.currentFilter = 'all';
+  state.sortKey = null;
+  state.currentTab = 'members';
+
+  // Update team button styles
+  Object.keys(TEAMS).forEach(k => {
+    const btn = document.getElementById('tbtn-' + k);
+    btn.classList.toggle('active', k === key);
+    if (k === key) {
+      btn.style.background = TEAMS[k].bg;
+      btn.style.color = TEAMS[k].color;
+      btn.style.borderColor = 'transparent';
+    } else {
+      btn.style.background = '';
+      btn.style.color = '';
+      btn.style.borderColor = '';
+    }
+  });
+
+  // Update header
+  const team = TEAMS[key];
+  document.getElementById('headerIcon').style.background = team.bg;
+  document.getElementById('headerSvg').style.stroke = team.color;
+  document.getElementById('headerSvg').innerHTML = team.icon;
+  document.getElementById('headerTitle').textContent = team.label + ' Team';
+  document.getElementById('headerSub').textContent = team.label + ' tasks · ClickUp live data';
+
+  // Update tab active color
+  document.querySelectorAll('.tab.active').forEach(t => t.style.color = team.color);
+
+  // Load data if not already loaded
+  if (!state.loaded[key]) {
+    showLoading();
+    document.getElementById('statusBadge').className = 'badge badge-loading';
+    document.getElementById('statusBadge').textContent = '● Loading…';
+
+    if (CLICKUP_TOKEN) {
+      const [spaceMembers, tasks, wsMembers] = await Promise.all([
+        fetchSpaceMembers(team.spaceId),
+        fetchTasks(team.listIds),
+        state.allMembers.length ? Promise.resolve(state.allMembers) : fetchWorkspaceMembers(),
+      ]);
+
+      // Populate allMembers from workspace call if not yet done
+      if (!state.allMembers.length) state.allMembers = wsMembers;
+      // Merge any space members not already in allMembers
+      spaceMembers.forEach(m => {
+        if (!state.allMembers.find(x => x.id === m.id)) state.allMembers.push(m);
+      });
+
+      state.tasks[key] = tasks;
+
+      let ids;
+      if (spaceMembers.length > 0) {
+        // Best case: Space members API worked — use it as the source of truth
+        ids = new Set(spaceMembers.map(m => m.id));
+      } else {
+        // Fallback: Space members API blocked (e.g. preview sandbox) —
+        // infer membership from task assignees only. On real deployment this won't be needed.
+        ids = new Set();
+        tasks.forEach(t => (t.assignees || []).forEach(a => ids.add(a.id)));
+        // If still empty (no tasks assigned), show ALL workspace members as a last resort
+        if (ids.size === 0) {
+          state.allMembers.forEach(m => ids.add(m.id));
+        }
+      }
+      // Always include anyone assigned to a task in this space
+      tasks.forEach(t => (t.assignees || []).forEach(a => {
+        ids.add(a.id);
+        if (!state.allMembers.find(x => x.id === a.id)) {
+          state.allMembers.push({ id: a.id, name: a.username || a.email || String(a.id), email: a.email || '' });
+        }
+      }));
+      state.spaceMemberIds[key] = ids;
+    } else {
+      useFallbackData(key);
+    }
+    state.loaded[key] = true;
+    document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
+    document.getElementById('statusBadge').className = 'badge badge-live';
+    document.getElementById('statusBadge').textContent = '● Live';
+  }
+
+  renderDashboard();
+}
+
+function useFallbackData(key) {
+  // All workspace members
+  state.allMembers = [
+    {id:106233723,name:'Aditya Dharap',email:'adharap@wisc.edu'},
+    {id:106233722,name:'EB',email:'ecbriggs@wisc.edu'},
+    {id:106233721,name:'Joseph Cicalese',email:'jcicalese@wisc.edu'},
+    {id:106232829,name:'Amelia Stalter',email:'astalter2@wisc.edu'},
+    {id:106232824,name:'lbolson6',email:'lbolson6@wisc.edu'},
+    {id:106232823,name:'David Wang',email:'wang3458@wisc.edu'},
+    {id:106232821,name:'Landon Penn Colaresi',email:'colaresi@wisc.edu'},
+    {id:210029755,name:'Evan Tian',email:'etian2@wisc.edu'},
+    {id:100234115,name:'Miles Sierra',email:'mvsierra@wisc.edu'},
+    {id:100234114,name:'George Vandersluis',email:'gvandersluis@wisc.edu'},
+    {id:204134978,name:'Devansh Gupta',email:'dgupta57@wisc.edu'},
+  ];
+
+  const allTasks = {
+    electrical: [
+      {id:'86bad1m8m',name:'Recruitment',status:'planned',priority:'high',tags:[{name:'team'}],url:'https://app.clickup.com/t/86bad1m8m',assignees:[{id:106233721,username:'Joseph Cicalese'},{id:106233722,username:'EB'}]},
+      {id:'86bad1k6r',name:'Plan & organize skills training',status:'possible',tags:[{name:'team'}],url:'https://app.clickup.com/t/86bad1k6r',assignees:[]},
+      {id:'86bad1k60',name:'Training PCBs',status:'possible',tags:[],url:'https://app.clickup.com/t/86bad1k60',assignees:[]},
+      {id:'86bad1jnt',name:'Custom motor controllers',status:'possible',tags:[],url:'https://app.clickup.com/t/86bad1jnt',assignees:[]},
+      {id:'86bad1d6v',name:'Better documentation organization',status:'possible',tags:[{name:'workstation'}],url:'https://app.clickup.com/t/86bad1d6v',assignees:[]},
+      {id:'86bad1bd5',name:'Part list on bottom of PCBs',status:'possible',tags:[{name:'pdb'}],url:'https://app.clickup.com/t/86bad1bd5',assignees:[]},
+      {id:'86bad19zm',name:'Inventory system',status:'possible',tags:[{name:'workstation'}],url:'https://app.clickup.com/t/86bad19zm',assignees:[]},
+      {id:'86bad197p',name:'Better equipment/supplies',status:'possible',tags:[{name:'workstation'}],url:'https://app.clickup.com/t/86bad197p',assignees:[]},
+      {id:'86bad17fb',name:'Backup off-the-shelf buck converters',status:'possible',tags:[{name:'pdb'}],url:'https://app.clickup.com/t/86bad17fb',assignees:[]},
+      {id:'86bad16zy',name:'Find a different buck converter chip',status:'possible',tags:[{name:'pdb'}],url:'https://app.clickup.com/t/86bad16zy',assignees:[]},
+      {id:'86bad16qz',name:'Get camera code to use multiple cores',status:'possible',tags:[{name:'cameras'}],url:'https://app.clickup.com/t/86bad16qz',assignees:[]},
+      {id:'86bad163q',name:'Rotating cams',status:'possible',tags:[{name:'cameras'}],url:'https://app.clickup.com/t/86bad163q',assignees:[]},
+      {id:'86bad162w',name:'360 cam',status:'possible',tags:[{name:'cameras'}],url:'https://app.clickup.com/t/86bad162w',assignees:[]},
+      {id:'86bad15zg',name:'Cooling for camera Pis',status:'possible',tags:[{name:'cameras'}],url:'https://app.clickup.com/t/86bad15zg',assignees:[]},
+      {id:'86bad15n3',name:'Electrical box + chassis integration',status:'possible',tags:[{name:'integration'}],url:'https://app.clickup.com/t/86bad15n3',assignees:[]},
+      {id:'86bad1573',name:'Clean up antenna wiring',status:'possible',tags:[{name:'networking'}],url:'https://app.clickup.com/t/86bad1573',assignees:[]},
+      {id:'86bad1569',name:'Make antenna spin',status:'possible',tags:[{name:'networking'}],url:'https://app.clickup.com/t/86bad1569',assignees:[]},
+      {id:'86bad1513',name:'Help science',status:'possible',tags:[{name:'integration'}],url:'https://app.clickup.com/t/86bad1513',assignees:[]},
+      {id:'86bad14pt',name:'Buck converter backups',status:'possible',tags:[{name:'pdb'}],url:'https://app.clickup.com/t/86bad14pt',assignees:[]},
+      {id:'86bad14dm',name:'ESD protection in the lab',status:'possible',tags:[{name:'workstation'}],url:'https://app.clickup.com/t/86bad14dm',assignees:[]},
+      {id:'86bad144z',name:'ESD protection for CAN transceiver',status:'possible',tags:[{name:'pdb'}],url:'https://app.clickup.com/t/86bad144z',assignees:[]},
+      {id:'86bad13d0',name:'Custom batteries',status:'possible',tags:[{name:'batteries'}],url:'https://app.clickup.com/t/86bad13d0',assignees:[]},
+      {id:'86bad138r',name:'Hot-swappable batteries',status:'possible',tags:[{name:'batteries'}],url:'https://app.clickup.com/t/86bad138r',assignees:[]},
+      {id:'86bad1369',name:'Battery management system',status:'possible',tags:[{name:'batteries'}],url:'https://app.clickup.com/t/86bad1369',assignees:[]},
+      {id:'86bad12mk',name:'Tri-band',status:'possible',tags:[{name:'networking'}],url:'https://app.clickup.com/t/86bad12mk',assignees:[]},
+      {id:'86bad12m1',name:'RPi Ethernet Switch',status:'possible',tags:[{name:'networking'}],url:'https://app.clickup.com/t/86bad12m1',assignees:[]},
+    ],
+    mechanical: [
+      {id:'86babrqg0',name:'New Member Training',status:'to do',tags:[],url:'https://app.clickup.com/t/86babrqg0',assignees:[]},
+      {id:'86baay4qd',name:'Differential',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay4qd',assignees:[]},
+      {id:'86baay4gj',name:'Mini Rover',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay4gj',assignees:[]},
+      {id:'86baay4f9',name:'Drill',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay4f9',assignees:[]},
+      {id:'86baay4ep',name:'Science',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay4ep',assignees:[]},
+      {id:'86baay4aq',name:'Sample Cache',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay4aq',assignees:[]},
+      {id:'86baay4a4',name:'Sample Cache',status:'in progress',tags:[],url:'https://app.clickup.com/t/86baay4a4',assignees:[{id:100234114,username:'George Vandersluis'}]},
+      {id:'86baay49x',name:'Mock Lander',status:'in progress',tags:[],url:'https://app.clickup.com/t/86baay49x',assignees:[{id:100234114,username:'George Vandersluis'}]},
+      {id:'86baay49g',name:'Equipment Servicing',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay49g',assignees:[]},
+      {id:'86baay496',name:'Delivery',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay496',assignees:[]},
+      {id:'86baay492',name:'Mock URC',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay492',assignees:[]},
+      {id:'86baay487',name:'Antenna',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay487',assignees:[]},
+      {id:'86baay478',name:'Base Station',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay478',assignees:[]},
+      {id:'86baay46d',name:'Manipulator',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay46d',assignees:[]},
+      {id:'86baay45f',name:'Supination',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay45f',assignees:[]},
+      {id:'86baay40u',name:'Z',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay40u',assignees:[]},
+      {id:'86baay404',name:'Y',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay404',assignees:[]},
+      {id:'86baay402',name:'X',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay402',assignees:[]},
+      {id:'86baay3zb',name:'Antenna',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3zb',assignees:[]},
+      {id:'86baay3z9',name:'Camera',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3z9',assignees:[]},
+      {id:'86baay3z2',name:'Frame',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3z2',assignees:[]},
+      {id:'86baay3yx',name:'Wheel',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3yx',assignees:[]},
+      {id:'86baay3ym',name:'Powertrain',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3ym',assignees:[]},
+      {id:'86baay3rj',name:'Swerve',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3rj',assignees:[]},
+      {id:'86baay3r1',name:'Rocker',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3r1',assignees:[]},
+      {id:'86baay3nf',name:'Support',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3nf',assignees:[]},
+      {id:'86baay3m4',name:'Arm',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3m4',assignees:[]},
+      {id:'86baay3kh',name:'Chassis',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3kh',assignees:[]},
+      {id:'86baay3kf',name:'Drive',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3kf',assignees:[]},
+    ],
+    software: [
+      {id:'86baaytxf',name:'Simulation',status:'to do',tags:[],url:'https://app.clickup.com/t/86baaytxf',assignees:[{id:106233723,username:'Aditya Dharap'}]},
+      {id:'86baaytwh',name:'Experiment with mounting depth camera on gimbal',status:'in progress',tags:[],url:'https://app.clickup.com/t/86baaytwh',assignees:[{id:106232823,username:'David Wang'}]},
+      {id:'86baaytuh',name:'Stabilize heading and write simple point to point navigation code',status:'to do',tags:[],url:'https://app.clickup.com/t/86baaytuh',assignees:[]},
+      {id:'86baaytp7',name:'Re-write state machine',status:'to do',tags:[],url:'https://app.clickup.com/t/86baaytp7',assignees:[{id:106232823,username:'David Wang'}]},
+      {id:'86baaytjt',name:'New member training',status:'in progress',tags:[],url:'https://app.clickup.com/t/86baaytjt',assignees:[{id:106232823,username:'David Wang'}]},
+      {id:'86baayth5',name:'Code base cleanup & documentation',status:'in progress',tags:[],url:'https://app.clickup.com/t/86baayth5',assignees:[{id:106232823,username:'David Wang'}]},
+    ],
+    science: [
+      {id:'86babub2g',name:'Upgrade High Vacuum system',status:'to do',tags:[],url:'https://app.clickup.com/t/86babub2g',assignees:[]},
+      {id:'86babua4h',name:'Submit paper',status:'to do',tags:[],url:'https://app.clickup.com/t/86babua4h',assignees:[]},
+      {id:'86babua4b',name:'Edit paper',status:'to do',tags:[],url:'https://app.clickup.com/t/86babua4b',assignees:[]},
+      {id:'86babernv',name:'Design new PVD unit',status:'in progress',tags:[],url:'https://app.clickup.com/t/86babernv',assignees:[]},
+      {id:'86babemyj',name:'Write up paper',status:'to do',tags:[],url:'https://app.clickup.com/t/86babemyj',assignees:[]},
+      {id:'86babemr2',name:'Build new enclosure & measuring circuit',status:'to do',tags:[],url:'https://app.clickup.com/t/86babemr2',assignees:[]},
+      {id:'86babem5u',name:'Evaluation experiment',status:'to do',tags:[],url:'https://app.clickup.com/t/86babem5u',assignees:[]},
+      {id:'86babekzx',name:'Fabricate sensors for evaluation experiment',status:'to do',tags:[],url:'https://app.clickup.com/t/86babekzx',assignees:[]},
+      {id:'86babegyf',name:'Build test chamber',status:'to do',tags:[],url:'https://app.clickup.com/t/86babegyf',assignees:[]},
+      {id:'86babegvg',name:'Design test chamber',status:'to do',tags:[],url:'https://app.clickup.com/t/86babegvg',assignees:[]},
+      {id:'86babegq8',name:'Double exposure lithography',status:'to do',tags:[],url:'https://app.clickup.com/t/86babegq8',assignees:[]},
+      {id:'86babeggd',name:'Finish lithography exposure tool',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeggd',assignees:[]},
+      {id:'86babeg8a',name:'Build new PVD unit',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeg8a',assignees:[]},
+      {id:'86babeft4',name:'Integration & Redundancy',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeft4',assignees:[]},
+      {id:'86babeez9',name:'Auxillary Sensors',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeez9',assignees:[]},
+      {id:'86babeeqw',name:'Biomolecule Assay',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeeqw',assignees:[]},
+      {id:'86babeejk',name:'Nanocrystalline Methane Sensor',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeejk',assignees:[]},
+      {id:'86babeeak',name:'Advanced X-Ray Spectrometer',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeeak',assignees:[]},
+      {id:'86babe52c',name:'Decide on biomolecule assay',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe52c',assignees:[]},
+      {id:'86babe3tn',name:'Independent Power & Radio',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe3tn',assignees:[]},
+      {id:'86babe3my',name:'Electronics',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe3my',assignees:[]},
+      {id:'86babe3kr',name:'X-Ray System',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe3kr',assignees:[]},
+      {id:'86babe32k',name:'Backup Subsurface Sampling',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe32k',assignees:[]},
+      {id:'86babe309',name:'Biomolecule assay',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe309',assignees:[]},
+      {id:'86babe2x0',name:'Cache System',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe2x0',assignees:[]},
+      {id:'86babe29m',name:'Transferring Sample to Cache',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe29m',assignees:[]},
+      {id:'86babe21v',name:'Backup Subsurface Sampling',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe21v',assignees:[]},
+      {id:'86babe201',name:'Subsurface Sampling',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe201',assignees:[]},
+      {id:'86bab4wke',name:'Preliminary design for new science system',status:'to do',tags:[],url:'https://app.clickup.com/t/86bab4wke',assignees:[]},
+      {id:'86bab4wfj',name:'Plan out X-ray spectroscopy unit',status:'in progress',tags:[],url:'https://app.clickup.com/t/86bab4wfj',assignees:[]},
+      {id:'86bab4wee',name:'Start writing up Methane Sensor Paper',status:'to do',tags:[],url:'https://app.clickup.com/t/86bab4wee',assignees:[]},
+    ],
+  };
+
+  state.tasks[key] = allTasks[key] || [];
+
+  // Build space member IDs from fallback + task assignees
+  const ids = new Set(SPACE_MEMBER_FALLBACK[key] || []);
+  state.tasks[key].forEach(t => (t.assignees||[]).forEach(a => ids.add(a.id)));
+  state.spaceMemberIds[key] = ids;
+
+  document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
+  document.getElementById('statusBadge').className = 'badge badge-live';
+  document.getElementById('statusBadge').textContent = '● Live';
+}
+
+function showLoading() {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <div>Loading ${TEAMS[state.currentTeam]?.label} data from ClickUp…</div>
+    </div>`;
+}
+
+function renderDashboard() {
+  const key = state.currentTeam;
+  const team = TEAMS[key];
+  const tasks = state.tasks[key] || [];
+  const stats = buildMemberStats(key);
+  const withTasks = stats.filter(m => m.assigned > 0);
+  const noTasks = stats.filter(m => m.assigned === 0);
+  const totalAssigned = tasks.filter(t => (t.assignees||[]).length > 0).length;
+  const totalUnassigned = tasks.length - totalAssigned;
+  const totalOverdue = tasks.filter(isOverdue).length;
+  const teamMembers = stats.length;
+
+  const tabColor = team.color;
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="metrics" id="metrics">
+      <div class="metric"><div class="metric-label">Total tasks</div><div class="metric-value">${tasks.length}</div><div class="metric-sub">in ${team.label}</div></div>
+      <div class="metric"><div class="metric-label">Assigned</div><div class="metric-value" style="color:${totalAssigned>0?'#1D9E75':'var(--text)'}">${totalAssigned}</div><div class="metric-sub">to a member</div></div>
+      <div class="metric"><div class="metric-label">Unassigned</div><div class="metric-value" style="color:${totalUnassigned>0?'#BA7517':'var(--text)'}">${totalUnassigned}</div><div class="metric-sub">need owner</div></div>
+      <div class="metric"><div class="metric-label">Overdue</div><div class="metric-value" style="color:${totalOverdue>0?'#A32D2D':'var(--text)'}">${totalOverdue}</div><div class="metric-sub">past due</div></div>
+      <div class="metric"><div class="metric-label">Team size</div><div class="metric-value">${teamMembers}</div><div class="metric-sub">members</div></div>
+    </div>
+
+    ${totalUnassigned > 0 ? `<div style="margin-bottom:1rem"><span class="badge badge-warn" style="font-size:12px;padding:5px 12px;border-radius:var(--radius-sm)">⚠ ${totalUnassigned} task${totalUnassigned>1?'s':''} unassigned — add owners in ClickUp</span></div>` : ''}
+
+    <div class="tabs">
+      <button class="tab active" id="tab-btn-members" onclick="switchTab('members')" style="color:${tabColor}">Team members</button>
+      <button class="tab" id="tab-btn-tasks" onclick="switchTab('tasks')">All tasks (${tasks.length})</button>
+      <button class="tab" id="tab-btn-bytag" onclick="switchTab('bytag')">By category</button>
+    </div>
+
+    <div id="tab-members"></div>
+    <div id="member-detail" style="display:none"></div>
+    <div id="tab-tasks" style="display:none"></div>
+    <div id="tab-bytag" style="display:none"></div>
+  `;
+
+  renderMembers();
+  renderTasks();
+  renderByTag();
+}
+
+function switchTab(name) {
+  closeDetail();
+  ['members','tasks','bytag'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t===name?'':'none';
+    const btn = document.getElementById('tab-btn-'+t);
+    btn.classList.toggle('active', t===name);
+    btn.style.color = t===name ? TEAMS[state.currentTeam].color : '';
+  });
+  state.currentTab = name;
+}
+
+function renderMembers() {
+  const key = state.currentTeam;
+  const team = TEAMS[key];
+  const stats = buildMemberStats(key);
+  const el = document.getElementById('tab-members');
+  if (!el) return;
+
+  if (!stats.length) {
+    el.innerHTML = '<div class="notice"><strong>No members found</strong><br>Add members to the ' + team.label + ' Space in ClickUp to see them here.</div>';
+    return;
+  }
+
+  // Apply filters (unassigned members only show under "All")
+  let list = [...stats];
+  if (state.currentFilter === 'overdue') list = list.filter(m => m.overdue > 0);
+  if (state.currentFilter === 'low') list = list.filter(m => m.assigned > 0 && pct(m) < 50);
+  if (state.currentFilter === 'done') list = list.filter(m => m.assigned > 0 && m.done === m.assigned);
+
+  if (state.sortKey) {
+    const k = state.sortKey;
+    list.sort((a,b) => {
+      const va = k==='name'?a.name:k==='assigned'?a.assigned:k==='done'?a.done:k==='pct'?pct(a):a.overdue;
+      const vb = k==='name'?b.name:k==='assigned'?b.assigned:k==='done'?b.done:k==='pct'?pct(b):b.overdue;
+      return state.sortAsc?(va>vb?1:va<vb?-1:0):(va<vb?1:va>vb?-1:0);
+    });
+  }
+
+  const si = k => state.sortKey!==k?'<span style="font-size:9px;color:var(--text3)"> ↕</span>':`<span style="font-size:9px"> ${state.sortAsc?'↑':'↓'}</span>`;
+
+  const allActive = state.currentFilter === 'all';
+  const allStyle = allActive ? 'background:' + team.bg + ';color:' + team.color + ';border-color:transparent' : '';
+  let html = '<div class="filter-row">'
+    + '<span style="font-size:11px;color:var(--text2)">Filter:</span>'
+    + '<button class="filter-btn ' + (allActive?'active':'') + '" style="' + allStyle + '" onclick="setFilter(\'all\',this)">All</button>'
+    + '<button class="filter-btn ' + (state.currentFilter==='overdue'?'active':'') + '" onclick="setFilter(\'overdue\',this)">Has overdue</button>'
+    + '<button class="filter-btn ' + (state.currentFilter==='low'?'active':'') + '" onclick="setFilter(\'low\',this)">Below 50%</button>'
+    + '<button class="filter-btn ' + (state.currentFilter==='done'?'active':'') + '" onclick="setFilter(\'done\',this)">Fully done</button>'
+    + '</div>';
+
+  html += '<div class="table-wrap"><table>'
+    + '<thead><tr>'
+    + '<th style="width:28%" onclick="doSort(\'name\')">Member' + si('name') + '</th>'
+    + '<th style="width:10%;text-align:center" onclick="doSort(\'assigned\')">Assigned' + si('assigned') + '</th>'
+    + '<th style="width:10%;text-align:center" onclick="doSort(\'done\')">Done' + si('done') + '</th>'
+    + '<th style="width:24%" onclick="doSort(\'pct\')">Progress' + si('pct') + '</th>'
+    + '<th style="width:18%">Breakdown</th>'
+    + '<th style="width:10%;text-align:center" onclick="doSort(\'overdue\')">Overdue' + si('overdue') + '</th>'
+    + '</tr></thead><tbody>';
+
+  list.forEach(m => {
+    const p = pct(m);
+    const av = AVATAR_COLORS[m.idx % AVATAR_COLORS.length];
+    const isOpen = state.openMemberId === m.id;
+    const dP = m.assigned ? Math.round(m.done/m.assigned*100) : 0;
+    const iP = m.assigned ? Math.round(m.inProgress/m.assigned*100) : 0;
+    const noAssign = m.assigned === 0;
+    html += '<tr class="mr' + (isOpen?' active':'') + '" id="mrow-' + m.id + '" onclick="openDetail(' + m.id + ')" style="' + (isOpen?'background:'+team.bg:'') + '">'
+      + '<td><div class="name-cell">'
+      + '<div class="avatar" style="background:' + av.bg + ';color:' + av.c + '">' + ini(m.name) + '</div>'
+      + '<span style="font-weight:500">' + m.name + '</span>'
+      + (noAssign ? '<span style="font-size:10px;color:var(--text3);margin-left:4px;background:var(--surface2);padding:1px 6px;border-radius:99px">no tasks</span>' : '')
+      + '</div></td>'
+      + '<td style="text-align:center;color:' + (noAssign?'var(--text3)':'var(--text2)') + '">' + m.assigned + '</td>'
+      + '<td style="text-align:center;color:' + (noAssign?'var(--text3)':'var(--text2)') + '">' + m.done + '</td>'
+      + '<td>' + (noAssign
+        ? '<span style="font-size:11px;color:var(--text3)">No tasks assigned yet</span>'
+        : '<div class="progress-bg"><div class="progress-fill" style="width:' + p + '%;background:' + barColor(p) + '"></div></div><div class="pct-label">' + p + '%</div>'
+      ) + '</td>'
+      + '<td>' + (noAssign
+        ? '<span style="font-size:11px;color:var(--text3)">—</span>'
+        : '<div style="display:flex;height:5px;border-radius:99px;overflow:hidden;gap:1px">'
+          + '<div style="width:' + dP + '%;background:#3266ad;min-width:' + (dP>0?2:0) + 'px"></div>'
+          + '<div style="width:' + iP + '%;background:#EF9F27;min-width:' + (iP>0?2:0) + 'px"></div>'
+          + '<div style="flex:1;background:var(--surface2)"></div></div>'
+          + '<div style="font-size:9px;color:var(--text3);margin-top:2px">' + m.done + 'd · ' + m.inProgress + 'a · ' + m.todo + 't</div>'
+      ) + '</td>'
+      + '<td style="text-align:center">' + (m.overdue===0?'<span style="color:var(--text3)">—</span>':m.overdue<=1?'<span style="color:#BA7517;font-weight:500">'+m.overdue+'</span>':'<span style="color:#A32D2D;font-weight:500">'+m.overdue+'</span>') + '</td>'
+      + '</tr>';
+  });
+
+  if (!list.length) {
+    html += '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">No members match this filter</td></tr>';
+  }
+
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function openDetail(memberId) {
+  const key = state.currentTeam;
+  const team = TEAMS[key];
+  if (state.openMemberId === memberId) { closeDetail(); return; }
+  state.openMemberId = memberId;
+  const member = state.allMembers.find(m => m.id === memberId);
+  if (!member) return;
+  const idx = state.allMembers.findIndex(m => m.id === memberId);
+  const av = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+  const mt = (state.tasks[key]||[]).filter(t => (t.assignees||[]).some(a => a.id === memberId));
+  const done = mt.filter(isDone), active = mt.filter(t => !isDone(t)&&isActive(t)), todo = mt.filter(t => !isDone(t)&&!isActive(t)), ov = mt.filter(isOverdue);
+  const p = mt.length ? Math.round(done.length/mt.length*100) : 0;
+  const cats = {};
+  mt.forEach(t => { const tags=(t.tags||[]).map(tg=>tg.name||tg); (tags.length?tags:['general']).forEach(tg => { cats[tg]=(cats[tg]||0)+1; }); });
+
+  const dp = document.getElementById('member-detail');
+  dp.style.display = 'block';
+  dp.innerHTML = `<div class="detail-panel">
+    <div class="detail-header">
+      <div class="detail-header-left">
+        <div class="detail-av" style="background:${av.bg};color:${av.c}">${ini(member.name)}</div>
+        <div>
+          <div class="detail-name">${member.name}</div>
+          <div class="detail-email">${member.email||''} · <span style="color:${team.color}">${team.label}</span></div>
+        </div>
+      </div>
+      <button class="detail-close" onclick="closeDetail()">✕ Close</button>
+    </div>
+    <div class="detail-body">
+      <div class="detail-stats">
+        <div class="detail-stat"><div class="detail-stat-label">Assigned</div><div class="detail-stat-value">${mt.length}</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Done</div><div class="detail-stat-value" style="color:#1D9E75">${done.length}</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Active</div><div class="detail-stat-value" style="color:#3266ad">${active.length}</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">To do</div><div class="detail-stat-value">${todo.length}</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Overdue</div><div class="detail-stat-value" style="color:${ov.length>0?'#A32D2D':'var(--text)'}">${ov.length}</div></div>
+        <div class="detail-stat"><div class="detail-stat-label">Progress</div><div class="detail-stat-value" style="color:${barColor(p)}">${p}%</div></div>
+      </div>
+      ${mt.length ? `
+      <div style="margin-bottom:1rem">
+        <div class="section-title">Status breakdown</div>
+        ${[['Done',done.length,'#3266ad'],['Active',active.length,'#EF9F27'],['To do',todo.length,'var(--border-strong)']].map(([l,n,c])=>`
+          <div class="bar-row"><span class="bar-label">${l}</span><div class="bar-track"><div class="bar-fill" style="width:${mt.length?Math.round(n/mt.length*100):0}%;background:${c}"></div></div><span class="bar-count">${n}</span></div>`).join('')}
+      </div>
+      ${Object.keys(cats).length ? `<div style="margin-bottom:1rem"><div class="section-title">By category</div><div style="display:flex;flex-wrap:wrap;gap:5px">${Object.entries(cats).map(([tg,cnt])=>`<span style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 9px;font-size:11px;color:var(--text2)">${tg} <strong style="color:var(--text)">${cnt}</strong></span>`).join('')}</div></div>` : ''}
+      <div><div class="section-title">Tasks</div>
+        <div class="task-list">${mt.map(t=>`<div class="task-item">
+          <a class="task-name" href="${t.url}" target="_blank">${t.name}</a>
+          <div class="task-meta">
+            ${t.priority==='high'?'<span class="pill" style="background:#FCEBEB;color:#A32D2D">high</span>':''}
+            ${isOverdue(t)?'<span class="pill" style="background:#FAEEDA;color:#854F0B">overdue</span>':''}
+            ${statusPill(t)}
+          </div>
+        </div>`).join('')}</div>
+      </div>` : `<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px">No tasks assigned yet.</div>`}
+    </div>
+  </div>`;
+
+  renderMembers();
+  dp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeDetail() {
+  const dp = document.getElementById('member-detail');
+  if (dp) dp.style.display = 'none';
+  state.openMemberId = null;
+  renderMembers();
+}
+
+function setFilter(f, btn) {
+  state.currentFilter = f;
+  renderMembers();
+}
+
+function doSort(k) {
+  if (state.sortKey===k) state.sortAsc=!state.sortAsc;
+  else { state.sortKey=k; state.sortAsc=true; }
+  renderMembers();
+}
+
+function renderTasks() {
+  const el = document.getElementById('tab-tasks');
+  if (!el) return;
+  const tasks = state.tasks[state.currentTeam] || [];
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th style="width:46%">Task</th>
+      <th style="width:14%">Status</th>
+      <th style="width:16%">Category</th>
+      <th style="width:24%">Assignees</th>
+    </tr></thead>
+    <tbody>${tasks.map(t => {
+      const tags = (t.tags||[]).map(tg=>tg.name||tg);
+      return `<tr>
+        <td><a href="${t.url}" target="_blank" style="color:var(--text);text-decoration:none;font-weight:500">${t.name}</a>${t.priority==='high'?' <span class="pill" style="background:#FCEBEB;color:#A32D2D">high</span>':''}</td>
+        <td>${statusPill(t)}</td>
+        <td>${tags.map(tg=>`<span class="tag-pill" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${tg}</span>`).join('')||'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
+        <td>${(t.assignees||[]).length?(t.assignees||[]).map(a=>`<span style="font-size:11px;color:var(--text2)">${a.username}</span>`).join(', '):'<span style="font-size:11px;color:var(--text3)">unassigned</span>'}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+function renderByTag() {
+  const el = document.getElementById('tab-bytag');
+  if (!el) return;
+  const tasks = state.tasks[state.currentTeam] || [];
+  const groups = {};
+  tasks.forEach(t => {
+    const tags = (t.tags||[]).map(tg=>tg.name||tg);
+    const keys = tags.length ? tags : ['(uncategorized)'];
+    keys.forEach(tag => { if(!groups[tag])groups[tag]=[]; if(!groups[tag].find(x=>x.id===t.id))groups[tag].push(t); });
+  });
+  const sorted = Object.keys(groups).sort();
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th style="width:18%">Category</th><th style="width:8%">Tasks</th><th>Items</th></tr></thead>
+    <tbody>${sorted.map(tag=>`<tr>
+      <td><span class="tag-pill" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${tag}</span></td>
+      <td style="color:var(--text2)">${groups[tag].length}</td>
+      <td><div style="display:flex;flex-wrap:wrap;gap:3px">${groups[tag].map(t=>`<a class="cat-link" href="${t.url}" target="_blank">${t.name}</a>`).join('')}</div></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+async function refresh() {
+  if (!state.currentTeam) return;
+  state.loaded[state.currentTeam] = false;
+  await selectTeam(state.currentTeam);
+}
+window.refresh = refresh;
+window.selectTeam = selectTeam;
+window.switchTab = switchTab;
+window.openDetail = openDetail;
+window.closeDetail = closeDetail;
+window.setFilter = setFilter;
+window.doSort = doSort;
+
+// ── Token management ──────────────────────────────────────────────
+function openTokenModal() {
+  document.getElementById('tokenInput').value = CLICKUP_TOKEN || '';
+  document.getElementById('tokenModal').style.display = 'flex';
+  // Hide cancel button if no token yet (first-time setup)
+  document.getElementById('modalCancelBtn').style.display = CLICKUP_TOKEN ? '' : 'none';
+  setTimeout(() => document.getElementById('tokenInput').focus(), 50);
+}
+
+function closeTokenModal() {
+  document.getElementById('tokenModal').style.display = 'none';
+}
+
+function handleBackdropClick(e) {
+  if (e.target === document.getElementById('tokenModal') && CLICKUP_TOKEN) closeTokenModal();
+}
+
+function saveToken() {
+  const val = document.getElementById('tokenInput').value.trim();
+  if (!val) return;
+  CLICKUP_TOKEN = val;
+  localStorage.setItem('clickup_token', val);
+  closeTokenModal();
+  updateTokenUI();
+  // Reset loaded state so data reloads with new token
+  Object.keys(state.loaded).forEach(k => { state.loaded[k] = false; });
+  if (state.currentTeam) selectTeam(state.currentTeam);
+}
+
+function clearToken() {
+  CLICKUP_TOKEN = '';
+  localStorage.removeItem('clickup_token');
+  updateTokenUI();
+  Object.keys(state.loaded).forEach(k => { state.loaded[k] = false; });
+}
+
+function updateTokenUI() {
+  const banner = document.getElementById('tokenBanner');
+  const btn = document.getElementById('tokenBtn');
+  if (CLICKUP_TOKEN) {
+    banner.style.display = 'none';
+    btn.textContent = '🔑 Token ✓';
+    btn.style.color = 'var(--green-text)';
+  } else {
+    banner.style.display = 'flex';
+    btn.textContent = '🔑 Token';
+    btn.style.color = '';
+  }
+}
+
+buildTeamSelector();
+updateTokenUI();
+// Show token modal automatically on first visit (no token saved)
+if (!CLICKUP_TOKEN) openTokenModal();
+</script>
+</body>
+</html>
