@@ -290,13 +290,28 @@ function ini(name) {
 
 function pct(m) { return m.assigned ? Math.round(m.done / m.assigned * 100) : 0; }
 function barColor(p) { return p >= 80 ? '#1D9E75' : p >= 50 ? '#3266ad' : '#EF9F27'; }
-function isOverdue(t) { return t.due_date && Number(t.due_date) < Date.now() && !isDone(t); }
-function isDone(t) { return ['complete','closed','done'].some(s => (t.status||'').toLowerCase().includes(s)); }
-function isActive(t) { return !isDone(t) && ['in progress','active','in review','planned'].some(s => (t.status||'').toLowerCase().includes(s)); }
 
-function statusPill(t, teamColor) {
+// ClickUp API returns status as either a plain string or an object {status, color, type}
+function statusStr(t) {
+  if (!t.status) return '';
+  if (typeof t.status === 'string') return t.status.toLowerCase();
+  if (typeof t.status === 'object') return (t.status.status || '').toLowerCase();
+  return '';
+}
+function statusLabel(t) {
+  if (!t.status) return '—';
+  if (typeof t.status === 'string') return t.status;
+  if (typeof t.status === 'object') return t.status.status || '—';
+  return '—';
+}
+
+function isOverdue(t) { return t.due_date && Number(t.due_date) < Date.now() && !isDone(t); }
+function isDone(t) { return ['complete','closed','done'].some(s => statusStr(t).includes(s)); }
+function isActive(t) { return !isDone(t) && ['in progress','active','in review','planned'].some(s => statusStr(t).includes(s)); }
+
+function statusPill(t) {
   const c = isDone(t) ? {bg:'#E1F5EE',c:'#0F6E56'} : isActive(t) ? {bg:'#E6F1FB',c:'#185FA5'} : {bg:'var(--surface2)',c:'var(--text2)'};
-  return `<span class="pill" style="background:${c.bg};color:${c.c}">${t.status}</span>`;
+  return '<span class="pill" style="background:' + c.bg + ';color:' + c.c + '">' + statusLabel(t) + '</span>';
 }
 
 function buildMemberStats(teamKey) {
