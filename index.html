@@ -319,30 +319,32 @@ function buildMemberStats(teamKey) {
   const memberIds = state.spaceMemberIds[teamKey] || new Set();
   const map = {};
 
-  // Init all members of this space
+  const sid = v => String(v);
+
+  // Add all known space members first (0 stats), keyed by string id
   state.allMembers.forEach((m, i) => {
-    if (memberIds.has(m.id)) {
-      map[m.id] = { ...m, idx: i, assigned: 0, done: 0, inProgress: 0, todo: 0, overdue: 0 };
+    const mid = sid(m.id);
+    if (memberIds.has(mid) || memberIds.size === 0) {
+      map[mid] = { ...m, id: mid, idx: i, assigned: 0, done: 0, inProgress: 0, todo: 0, overdue: 0 };
     }
   });
 
+  // Tally task stats per member
   tasks.forEach(t => {
     (t.assignees || []).forEach(a => {
-      if (!map[a.id]) {
-        // assignee exists in tasks but not yet in our space members set — add them
-        const member = state.allMembers.find(m => m.id === a.id);
-        if (member) {
-          const idx = state.allMembers.findIndex(m => m.id === a.id);
-          map[a.id] = { ...member, idx, assigned: 0, done: 0, inProgress: 0, todo: 0, overdue: 0 };
-          state.spaceMemberIds[teamKey].add(a.id);
-        }
+      const aid = sid(a.id);
+      if (!map[aid]) {
+        const member = state.allMembers.find(m => sid(m.id) === aid);
+        const idx = state.allMembers.findIndex(m => sid(m.id) === aid);
+        const base = member || { id: aid, name: a.username || a.email || aid, email: a.email || '' };
+        map[aid] = { ...base, id: aid, idx: idx >= 0 ? idx : Object.keys(map).length, assigned: 0, done: 0, inProgress: 0, todo: 0, overdue: 0 };
+        if (state.spaceMemberIds[teamKey]) state.spaceMemberIds[teamKey].add(aid);
       }
-      if (!map[a.id]) return;
-      map[a.id].assigned++;
-      if (isDone(t)) map[a.id].done++;
-      else if (isActive(t)) map[a.id].inProgress++;
-      else map[a.id].todo++;
-      if (isOverdue(t)) map[a.id].overdue++;
+      map[aid].assigned++;
+      if (isDone(t)) map[aid].done++;
+      else if (isActive(t)) map[aid].inProgress++;
+      else map[aid].todo++;
+      if (isOverdue(t)) map[aid].overdue++;
     });
   });
   return Object.values(map);
@@ -442,10 +444,16 @@ async function selectTeam(key) {
         state.allMembers.length ? Promise.resolve(state.allMembers) : fetchWorkspaceMembers(),
       ]);
 
+      // Normalize helper — ClickUp IDs can come as numbers or strings, unify to string
+      const sid = v => String(v);
+
       // Populate allMembers from workspace call if not yet done
-      if (!state.allMembers.length) state.allMembers = wsMembers;
-      // Merge any space members not already in allMembers
+      if (!state.allMembers.length) {
+        state.allMembers = wsMembers.map(m => ({ ...m, id: sid(m.id) }));
+      }
+      // Merge space members into allMembers (dedup by string id)
       spaceMembers.forEach(m => {
+        m = { ...m, id: sid(m.id) };
         if (!state.allMembers.find(x => x.id === m.id)) state.allMembers.push(m);
       });
 
@@ -453,23 +461,21 @@ async function selectTeam(key) {
 
       let ids;
       if (spaceMembers.length > 0) {
-        // Best case: Space members API worked — use it as the source of truth
-        ids = new Set(spaceMembers.map(m => m.id));
+        // Best case: Space members API worked — use it as source of truth
+        ids = new Set(spaceMembers.map(m => sid(m.id)));
       } else {
-        // Fallback: Space members API blocked (e.g. preview sandbox) —
-        // infer membership from task assignees only. On real deployment this won't be needed.
+        // Fallback: Space API blocked — infer from task assignees
         ids = new Set();
-        tasks.forEach(t => (t.assignees || []).forEach(a => ids.add(a.id)));
-        // If still empty (no tasks assigned), show ALL workspace members as a last resort
-        if (ids.size === 0) {
-          state.allMembers.forEach(m => ids.add(m.id));
-        }
+        tasks.forEach(t => (t.assignees || []).forEach(a => ids.add(sid(a.id))));
+        // Last resort: show all workspace members
+        if (ids.size === 0) state.allMembers.forEach(m => ids.add(sid(m.id)));
       }
-      // Always include anyone assigned to a task in this space
+      // Always include task assignees
       tasks.forEach(t => (t.assignees || []).forEach(a => {
-        ids.add(a.id);
-        if (!state.allMembers.find(x => x.id === a.id)) {
-          state.allMembers.push({ id: a.id, name: a.username || a.email || String(a.id), email: a.email || '' });
+        const aid = sid(a.id);
+        ids.add(aid);
+        if (!state.allMembers.find(x => x.id === aid)) {
+          state.allMembers.push({ id: aid, name: a.username || a.email || aid, email: a.email || '' });
         }
       }));
       state.spaceMemberIds[key] = ids;
