@@ -223,6 +223,7 @@ const TEAMS = {
     label: 'Electrical',
     spaceId: '90144940619',
     listIds: ['901415194773'],
+    memberListId: '901417261292',  // "Team Members" list — add one task per member here
     color: '#185FA5', bg: '#E6F1FB',
     dot: '#3266ad',
     icon: '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>',
@@ -231,6 +232,7 @@ const TEAMS = {
     label: 'Mechanical',
     spaceId: '90144940703',
     listIds: ['901415194902'],
+    memberListId: '901417261293',  // "Team Members" list
     color: '#0F6E56', bg: '#E1F5EE',
     dot: '#1D9E75',
     icon: '<circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M20 12h2M2 12h2M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41"/>',
@@ -239,6 +241,7 @@ const TEAMS = {
     label: 'Software',
     spaceId: '90144940722',
     listIds: ['901415194930'],
+    memberListId: '901417261298',  // "Team Members" list
     color: '#534AB7', bg: '#EEEDFE',
     dot: '#7F77DD',
     icon: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
@@ -247,6 +250,7 @@ const TEAMS = {
     label: 'Science',
     spaceId: '90144940738',
     listIds: ['901415194954','901417109365'],
+    memberListId: '901417261299',  // "Team Members" list
     color: '#854F0B', bg: '#FAEEDA',
     dot: '#EF9F27',
     icon: '<path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>',
@@ -264,12 +268,6 @@ const AVATAR_COLORS = [
 
 // Fallback space→member mapping (auto-detected from tasks at runtime, supplemented here)
 // This gets built dynamically from task assignees — no manual config needed
-const SPACE_MEMBER_FALLBACK = {
-  electrical:  [106233721, 106233722],   // detected from assigned tasks
-  mechanical:  [100234114],
-  software:    [106233723, 106232823],
-  science:     [],
-};
 
 let state = {
   currentTeam: null,
@@ -284,8 +282,9 @@ let state = {
 };
 
 function ini(name) {
+  if (!name) return '?';
   const p = name.split(/[\s@]/);
-  return (p[0][0] + (p[1] ? p[1][0] : '')).toUpperCase();
+  return ((p[0]?.[0] || '') + (p[1]?.[0] || '')).toUpperCase() || '?';
 }
 
 function pct(m) { return m.assigned ? Math.round(m.done / m.assigned * 100) : 0; }
@@ -321,6 +320,10 @@ function buildMemberStats(teamKey) {
 
   const sid = v => String(v);
 
+  // DEBUG
+  console.log('[buildMemberStats] memberIds:', [...memberIds]);
+  console.log('[buildMemberStats] allMembers:', state.allMembers.map(m => ({id: m.id, sid: sid(m.id), name: m.name, has: memberIds.has(sid(m.id))})));
+
   // Add all known space members first (0 stats), keyed by string id
   state.allMembers.forEach((m, i) => {
     const mid = sid(m.id);
@@ -336,7 +339,7 @@ function buildMemberStats(teamKey) {
       if (!map[aid]) {
         const member = state.allMembers.find(m => sid(m.id) === aid);
         const idx = state.allMembers.findIndex(m => sid(m.id) === aid);
-        const base = member || { id: aid, name: a.username || a.email || aid, email: a.email || '' };
+        const base = member || { id: aid, name: a.username || a.name || a.email || aid, email: a.email || '' };
         map[aid] = { ...base, id: aid, idx: idx >= 0 ? idx : Object.keys(map).length, assigned: 0, done: 0, inProgress: 0, todo: 0, overdue: 0 };
         if (state.spaceMemberIds[teamKey]) state.spaceMemberIds[teamKey].add(aid);
       }
@@ -360,19 +363,29 @@ function buildTeamSelector() {
     </button>`).join('');
 }
 
-async function fetchSpaceMembers(spaceId) {
-  if (!CLICKUP_TOKEN) return [];
+async function fetchTeamMembers(memberListId) {
+  // Reads the "Team Members" list — one task per member, assignee = that member
+  if (!CLICKUP_TOKEN || !memberListId) return [];
   try {
-    const res = await fetch(`https://api.clickup.com/api/v2/space/${spaceId}/member`, {
-      headers: { Authorization: CLICKUP_TOKEN }
-    });
+    const res = await fetch(
+      'https://api.clickup.com/api/v2/list/' + memberListId + '/task?include_closed=false',
+      { headers: { Authorization: CLICKUP_TOKEN } }
+    );
     const data = await res.json();
-    // ClickUp returns { members: [ { user: {...} } ] } or { members: [{id,username,...}] }
-    return (data.members || []).map(m => {
-      const u = m.user || m;
-      return { id: u.id, name: u.username || u.email || String(u.id), email: u.email || '' };
+    const members = [];
+    (data.tasks || []).forEach(task => {
+      (task.assignees || []).forEach(a => {
+        if (!members.find(m => String(m.id) === String(a.id))) {
+          members.push({
+            id: a.id,
+            name: task.name || a.username || a.email || String(a.id),
+            email: a.email || ''
+          });
+        }
+      });
     });
-  } catch (e) { console.error('fetchSpaceMembers error:', e); return []; }
+    return members;
+  } catch (e) { console.error('fetchTeamMembers error:', e); return []; }
 }
 
 async function fetchTasks(listIds) {
@@ -387,16 +400,7 @@ async function fetchTasks(listIds) {
   } catch { return []; }
 }
 
-async function fetchWorkspaceMembers() {
-  if (!CLICKUP_TOKEN) return [];
-  try {
-    const res = await fetch('https://api.clickup.com/api/v2/team', {
-      headers: { Authorization: CLICKUP_TOKEN }
-    });
-    const data = await res.json();
-    return (data.teams?.[0]?.members || []).map(m => m.user);
-  } catch { return []; }
-}
+
 
 async function selectTeam(key) {
   state.currentTeam = key;
@@ -438,49 +442,42 @@ async function selectTeam(key) {
     document.getElementById('statusBadge').textContent = '● Loading…';
 
     if (CLICKUP_TOKEN) {
-      const [spaceMembers, tasks, wsMembers] = await Promise.all([
-        fetchSpaceMembers(team.spaceId),
+      const [spaceMembers, tasks] = await Promise.all([
+        fetchTeamMembers(team.memberListId),
         fetchTasks(team.listIds),
-        state.allMembers.length ? Promise.resolve(state.allMembers) : fetchWorkspaceMembers(),
       ]);
 
       // Normalize helper — ClickUp IDs can come as numbers or strings, unify to string
       const sid = v => String(v);
 
-      // Populate allMembers from workspace call if not yet done
-      if (!state.allMembers.length) {
-        state.allMembers = wsMembers.map(m => ({ ...m, id: sid(m.id) }));
-      }
-      // Merge space members into allMembers (dedup by string id)
-      spaceMembers.forEach(m => {
-        m = { ...m, id: sid(m.id) };
-        if (!state.allMembers.find(x => x.id === m.id)) state.allMembers.push(m);
-      });
-
       state.tasks[key] = tasks;
 
-      let ids;
-      if (spaceMembers.length > 0) {
-        // Best case: Space members API worked — use it as source of truth
-        ids = new Set(spaceMembers.map(m => sid(m.id)));
-      } else {
-        // Fallback: Space API blocked — infer from task assignees
-        ids = new Set();
-        tasks.forEach(t => (t.assignees || []).forEach(a => ids.add(sid(a.id))));
-        // Last resort: show all workspace members
-        if (ids.size === 0) state.allMembers.forEach(m => ids.add(sid(m.id)));
-      }
-      // Always include task assignees
+      // Build member set from Team Members list — source of truth for who's on this team
+      const ids = new Set(spaceMembers.map(m => sid(m.id)));
+
+      // Merge team members into allMembers
+      spaceMembers.forEach(m => {
+        const mid = sid(m.id);
+        if (!state.allMembers.find(x => String(x.id) === mid)) {
+          state.allMembers.push({ ...m, id: mid });
+        }
+      });
+
+      // Also catch anyone assigned to a real task but not in Team Members list yet
       tasks.forEach(t => (t.assignees || []).forEach(a => {
         const aid = sid(a.id);
-        ids.add(aid);
-        if (!state.allMembers.find(x => x.id === aid)) {
-          state.allMembers.push({ id: aid, name: a.username || a.email || aid, email: a.email || '' });
+        if (!state.allMembers.find(x => String(x.id) === aid)) {
+          state.allMembers.push({ id: aid, name: a.username || a.name || a.email || aid, email: a.email || '' });
         }
       }));
+
       state.spaceMemberIds[key] = ids;
     } else {
-      useFallbackData(key);
+      // No token — show prompt, nothing to load
+      document.getElementById('statusBadge').className = 'badge badge-warn';
+      document.getElementById('statusBadge').textContent = '● No token';
+      document.getElementById('mainContent').innerHTML = '<div class="notice"><strong>No API token set</strong><br>Click the 🔑 Token button above to connect your ClickUp account.</div>';
+      return;
     }
     state.loaded[key] = true;
     document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
@@ -491,136 +488,6 @@ async function selectTeam(key) {
   renderDashboard();
 }
 
-function useFallbackData(key) {
-  // All workspace members
-  state.allMembers = [
-    {id:106233723,name:'Aditya Dharap',email:'adharap@wisc.edu'},
-    {id:106233722,name:'EB',email:'ecbriggs@wisc.edu'},
-    {id:106233721,name:'Joseph Cicalese',email:'jcicalese@wisc.edu'},
-    {id:106232829,name:'Amelia Stalter',email:'astalter2@wisc.edu'},
-    {id:106232824,name:'lbolson6',email:'lbolson6@wisc.edu'},
-    {id:106232823,name:'David Wang',email:'wang3458@wisc.edu'},
-    {id:106232821,name:'Landon Penn Colaresi',email:'colaresi@wisc.edu'},
-    {id:210029755,name:'Evan Tian',email:'etian2@wisc.edu'},
-    {id:100234115,name:'Miles Sierra',email:'mvsierra@wisc.edu'},
-    {id:100234114,name:'George Vandersluis',email:'gvandersluis@wisc.edu'},
-    {id:204134978,name:'Devansh Gupta',email:'dgupta57@wisc.edu'},
-  ];
-
-  const allTasks = {
-    electrical: [
-      {id:'86bad1m8m',name:'Recruitment',status:'planned',priority:'high',tags:[{name:'team'}],url:'https://app.clickup.com/t/86bad1m8m',assignees:[{id:106233721,username:'Joseph Cicalese'},{id:106233722,username:'EB'}]},
-      {id:'86bad1k6r',name:'Plan & organize skills training',status:'possible',tags:[{name:'team'}],url:'https://app.clickup.com/t/86bad1k6r',assignees:[]},
-      {id:'86bad1k60',name:'Training PCBs',status:'possible',tags:[],url:'https://app.clickup.com/t/86bad1k60',assignees:[]},
-      {id:'86bad1jnt',name:'Custom motor controllers',status:'possible',tags:[],url:'https://app.clickup.com/t/86bad1jnt',assignees:[]},
-      {id:'86bad1d6v',name:'Better documentation organization',status:'possible',tags:[{name:'workstation'}],url:'https://app.clickup.com/t/86bad1d6v',assignees:[]},
-      {id:'86bad1bd5',name:'Part list on bottom of PCBs',status:'possible',tags:[{name:'pdb'}],url:'https://app.clickup.com/t/86bad1bd5',assignees:[]},
-      {id:'86bad19zm',name:'Inventory system',status:'possible',tags:[{name:'workstation'}],url:'https://app.clickup.com/t/86bad19zm',assignees:[]},
-      {id:'86bad197p',name:'Better equipment/supplies',status:'possible',tags:[{name:'workstation'}],url:'https://app.clickup.com/t/86bad197p',assignees:[]},
-      {id:'86bad17fb',name:'Backup off-the-shelf buck converters',status:'possible',tags:[{name:'pdb'}],url:'https://app.clickup.com/t/86bad17fb',assignees:[]},
-      {id:'86bad16zy',name:'Find a different buck converter chip',status:'possible',tags:[{name:'pdb'}],url:'https://app.clickup.com/t/86bad16zy',assignees:[]},
-      {id:'86bad16qz',name:'Get camera code to use multiple cores',status:'possible',tags:[{name:'cameras'}],url:'https://app.clickup.com/t/86bad16qz',assignees:[]},
-      {id:'86bad163q',name:'Rotating cams',status:'possible',tags:[{name:'cameras'}],url:'https://app.clickup.com/t/86bad163q',assignees:[]},
-      {id:'86bad162w',name:'360 cam',status:'possible',tags:[{name:'cameras'}],url:'https://app.clickup.com/t/86bad162w',assignees:[]},
-      {id:'86bad15zg',name:'Cooling for camera Pis',status:'possible',tags:[{name:'cameras'}],url:'https://app.clickup.com/t/86bad15zg',assignees:[]},
-      {id:'86bad15n3',name:'Electrical box + chassis integration',status:'possible',tags:[{name:'integration'}],url:'https://app.clickup.com/t/86bad15n3',assignees:[]},
-      {id:'86bad1573',name:'Clean up antenna wiring',status:'possible',tags:[{name:'networking'}],url:'https://app.clickup.com/t/86bad1573',assignees:[]},
-      {id:'86bad1569',name:'Make antenna spin',status:'possible',tags:[{name:'networking'}],url:'https://app.clickup.com/t/86bad1569',assignees:[]},
-      {id:'86bad1513',name:'Help science',status:'possible',tags:[{name:'integration'}],url:'https://app.clickup.com/t/86bad1513',assignees:[]},
-      {id:'86bad14pt',name:'Buck converter backups',status:'possible',tags:[{name:'pdb'}],url:'https://app.clickup.com/t/86bad14pt',assignees:[]},
-      {id:'86bad14dm',name:'ESD protection in the lab',status:'possible',tags:[{name:'workstation'}],url:'https://app.clickup.com/t/86bad14dm',assignees:[]},
-      {id:'86bad144z',name:'ESD protection for CAN transceiver',status:'possible',tags:[{name:'pdb'}],url:'https://app.clickup.com/t/86bad144z',assignees:[]},
-      {id:'86bad13d0',name:'Custom batteries',status:'possible',tags:[{name:'batteries'}],url:'https://app.clickup.com/t/86bad13d0',assignees:[]},
-      {id:'86bad138r',name:'Hot-swappable batteries',status:'possible',tags:[{name:'batteries'}],url:'https://app.clickup.com/t/86bad138r',assignees:[]},
-      {id:'86bad1369',name:'Battery management system',status:'possible',tags:[{name:'batteries'}],url:'https://app.clickup.com/t/86bad1369',assignees:[]},
-      {id:'86bad12mk',name:'Tri-band',status:'possible',tags:[{name:'networking'}],url:'https://app.clickup.com/t/86bad12mk',assignees:[]},
-      {id:'86bad12m1',name:'RPi Ethernet Switch',status:'possible',tags:[{name:'networking'}],url:'https://app.clickup.com/t/86bad12m1',assignees:[]},
-    ],
-    mechanical: [
-      {id:'86babrqg0',name:'New Member Training',status:'to do',tags:[],url:'https://app.clickup.com/t/86babrqg0',assignees:[]},
-      {id:'86baay4qd',name:'Differential',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay4qd',assignees:[]},
-      {id:'86baay4gj',name:'Mini Rover',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay4gj',assignees:[]},
-      {id:'86baay4f9',name:'Drill',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay4f9',assignees:[]},
-      {id:'86baay4ep',name:'Science',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay4ep',assignees:[]},
-      {id:'86baay4aq',name:'Sample Cache',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay4aq',assignees:[]},
-      {id:'86baay4a4',name:'Sample Cache',status:'in progress',tags:[],url:'https://app.clickup.com/t/86baay4a4',assignees:[{id:100234114,username:'George Vandersluis'}]},
-      {id:'86baay49x',name:'Mock Lander',status:'in progress',tags:[],url:'https://app.clickup.com/t/86baay49x',assignees:[{id:100234114,username:'George Vandersluis'}]},
-      {id:'86baay49g',name:'Equipment Servicing',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay49g',assignees:[]},
-      {id:'86baay496',name:'Delivery',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay496',assignees:[]},
-      {id:'86baay492',name:'Mock URC',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay492',assignees:[]},
-      {id:'86baay487',name:'Antenna',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay487',assignees:[]},
-      {id:'86baay478',name:'Base Station',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay478',assignees:[]},
-      {id:'86baay46d',name:'Manipulator',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay46d',assignees:[]},
-      {id:'86baay45f',name:'Supination',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay45f',assignees:[]},
-      {id:'86baay40u',name:'Z',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay40u',assignees:[]},
-      {id:'86baay404',name:'Y',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay404',assignees:[]},
-      {id:'86baay402',name:'X',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay402',assignees:[]},
-      {id:'86baay3zb',name:'Antenna',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3zb',assignees:[]},
-      {id:'86baay3z9',name:'Camera',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3z9',assignees:[]},
-      {id:'86baay3z2',name:'Frame',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3z2',assignees:[]},
-      {id:'86baay3yx',name:'Wheel',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3yx',assignees:[]},
-      {id:'86baay3ym',name:'Powertrain',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3ym',assignees:[]},
-      {id:'86baay3rj',name:'Swerve',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3rj',assignees:[]},
-      {id:'86baay3r1',name:'Rocker',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3r1',assignees:[]},
-      {id:'86baay3nf',name:'Support',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3nf',assignees:[]},
-      {id:'86baay3m4',name:'Arm',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3m4',assignees:[]},
-      {id:'86baay3kh',name:'Chassis',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3kh',assignees:[]},
-      {id:'86baay3kf',name:'Drive',status:'to do',tags:[],url:'https://app.clickup.com/t/86baay3kf',assignees:[]},
-    ],
-    software: [
-      {id:'86baaytxf',name:'Simulation',status:'to do',tags:[],url:'https://app.clickup.com/t/86baaytxf',assignees:[{id:106233723,username:'Aditya Dharap'}]},
-      {id:'86baaytwh',name:'Experiment with mounting depth camera on gimbal',status:'in progress',tags:[],url:'https://app.clickup.com/t/86baaytwh',assignees:[{id:106232823,username:'David Wang'}]},
-      {id:'86baaytuh',name:'Stabilize heading and write simple point to point navigation code',status:'to do',tags:[],url:'https://app.clickup.com/t/86baaytuh',assignees:[]},
-      {id:'86baaytp7',name:'Re-write state machine',status:'to do',tags:[],url:'https://app.clickup.com/t/86baaytp7',assignees:[{id:106232823,username:'David Wang'}]},
-      {id:'86baaytjt',name:'New member training',status:'in progress',tags:[],url:'https://app.clickup.com/t/86baaytjt',assignees:[{id:106232823,username:'David Wang'}]},
-      {id:'86baayth5',name:'Code base cleanup & documentation',status:'in progress',tags:[],url:'https://app.clickup.com/t/86baayth5',assignees:[{id:106232823,username:'David Wang'}]},
-    ],
-    science: [
-      {id:'86babub2g',name:'Upgrade High Vacuum system',status:'to do',tags:[],url:'https://app.clickup.com/t/86babub2g',assignees:[]},
-      {id:'86babua4h',name:'Submit paper',status:'to do',tags:[],url:'https://app.clickup.com/t/86babua4h',assignees:[]},
-      {id:'86babua4b',name:'Edit paper',status:'to do',tags:[],url:'https://app.clickup.com/t/86babua4b',assignees:[]},
-      {id:'86babernv',name:'Design new PVD unit',status:'in progress',tags:[],url:'https://app.clickup.com/t/86babernv',assignees:[]},
-      {id:'86babemyj',name:'Write up paper',status:'to do',tags:[],url:'https://app.clickup.com/t/86babemyj',assignees:[]},
-      {id:'86babemr2',name:'Build new enclosure & measuring circuit',status:'to do',tags:[],url:'https://app.clickup.com/t/86babemr2',assignees:[]},
-      {id:'86babem5u',name:'Evaluation experiment',status:'to do',tags:[],url:'https://app.clickup.com/t/86babem5u',assignees:[]},
-      {id:'86babekzx',name:'Fabricate sensors for evaluation experiment',status:'to do',tags:[],url:'https://app.clickup.com/t/86babekzx',assignees:[]},
-      {id:'86babegyf',name:'Build test chamber',status:'to do',tags:[],url:'https://app.clickup.com/t/86babegyf',assignees:[]},
-      {id:'86babegvg',name:'Design test chamber',status:'to do',tags:[],url:'https://app.clickup.com/t/86babegvg',assignees:[]},
-      {id:'86babegq8',name:'Double exposure lithography',status:'to do',tags:[],url:'https://app.clickup.com/t/86babegq8',assignees:[]},
-      {id:'86babeggd',name:'Finish lithography exposure tool',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeggd',assignees:[]},
-      {id:'86babeg8a',name:'Build new PVD unit',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeg8a',assignees:[]},
-      {id:'86babeft4',name:'Integration & Redundancy',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeft4',assignees:[]},
-      {id:'86babeez9',name:'Auxillary Sensors',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeez9',assignees:[]},
-      {id:'86babeeqw',name:'Biomolecule Assay',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeeqw',assignees:[]},
-      {id:'86babeejk',name:'Nanocrystalline Methane Sensor',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeejk',assignees:[]},
-      {id:'86babeeak',name:'Advanced X-Ray Spectrometer',status:'to do',tags:[],url:'https://app.clickup.com/t/86babeeak',assignees:[]},
-      {id:'86babe52c',name:'Decide on biomolecule assay',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe52c',assignees:[]},
-      {id:'86babe3tn',name:'Independent Power & Radio',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe3tn',assignees:[]},
-      {id:'86babe3my',name:'Electronics',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe3my',assignees:[]},
-      {id:'86babe3kr',name:'X-Ray System',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe3kr',assignees:[]},
-      {id:'86babe32k',name:'Backup Subsurface Sampling',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe32k',assignees:[]},
-      {id:'86babe309',name:'Biomolecule assay',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe309',assignees:[]},
-      {id:'86babe2x0',name:'Cache System',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe2x0',assignees:[]},
-      {id:'86babe29m',name:'Transferring Sample to Cache',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe29m',assignees:[]},
-      {id:'86babe21v',name:'Backup Subsurface Sampling',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe21v',assignees:[]},
-      {id:'86babe201',name:'Subsurface Sampling',status:'to do',tags:[],url:'https://app.clickup.com/t/86babe201',assignees:[]},
-      {id:'86bab4wke',name:'Preliminary design for new science system',status:'to do',tags:[],url:'https://app.clickup.com/t/86bab4wke',assignees:[]},
-      {id:'86bab4wfj',name:'Plan out X-ray spectroscopy unit',status:'in progress',tags:[],url:'https://app.clickup.com/t/86bab4wfj',assignees:[]},
-      {id:'86bab4wee',name:'Start writing up Methane Sensor Paper',status:'to do',tags:[],url:'https://app.clickup.com/t/86bab4wee',assignees:[]},
-    ],
-  };
-
-  state.tasks[key] = allTasks[key] || [];
-
-  // Build space member IDs from fallback + task assignees
-  const ids = new Set(SPACE_MEMBER_FALLBACK[key] || []);
-  state.tasks[key].forEach(t => (t.assignees||[]).forEach(a => ids.add(a.id)));
-  state.spaceMemberIds[key] = ids;
-
-  document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
-  document.getElementById('statusBadge').className = 'badge badge-live';
-  document.getElementById('statusBadge').textContent = '● Live';
-}
 
 function showLoading() {
   document.getElementById('mainContent').innerHTML = `
@@ -854,23 +721,29 @@ function renderTasks() {
   const el = document.getElementById('tab-tasks');
   if (!el) return;
   const tasks = state.tasks[state.currentTeam] || [];
-  el.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr>
-      <th style="width:46%">Task</th>
-      <th style="width:14%">Status</th>
-      <th style="width:16%">Category</th>
-      <th style="width:24%">Assignees</th>
-    </tr></thead>
-    <tbody>${tasks.map(t => {
-      const tags = (t.tags||[]).map(tg=>tg.name||tg);
-      return `<tr>
-        <td><a href="${t.url}" target="_blank" style="color:var(--text);text-decoration:none;font-weight:500">${t.name}</a>${t.priority==='high'?' <span class="pill" style="background:#FCEBEB;color:#A32D2D">high</span>':''}</td>
-        <td>${statusPill(t)}</td>
-        <td>${tags.map(tg=>`<span class="tag-pill" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${tg}</span>`).join('')||'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
-        <td>${(t.assignees||[]).length?(t.assignees||[]).map(a=>`<span style="font-size:11px;color:var(--text2)">${a.username}</span>`).join(', '):'<span style="font-size:11px;color:var(--text3)">unassigned</span>'}</td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table></div>`;
+  const priorityStr = t => (typeof t.priority === 'object' ? (t.priority?.priority || '') : (t.priority || '')).toLowerCase();
+  let rows = '';
+  tasks.forEach(t => {
+    const tags = (t.tags || []).map(tg => tg.name || tg);
+    const assignees = (t.assignees || []).map(a => '<span style="font-size:11px;color:var(--text2)">' + (a.username || a.email || '?') + '</span>').join(', ') || '<span style="font-size:11px;color:var(--text3)">unassigned</span>';
+    const tagHtml = tags.map(tg => '<span class="tag-pill" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">' + tg + '</span>').join('') || '<span style="color:var(--text3);font-size:11px">—</span>';
+    const highPill = priorityStr(t) === 'high' ? ' <span class="pill" style="background:#FCEBEB;color:#A32D2D">high</span>' : '';
+    rows += '<tr>'
+      + '<td><a href="' + (t.url||'#') + '" target="_blank" style="color:var(--text);text-decoration:none;font-weight:500">' + (t.name||'') + '</a>' + highPill + '</td>'
+      + '<td>' + statusPill(t) + '</td>'
+      + '<td>' + tagHtml + '</td>'
+      + '<td>' + assignees + '</td>'
+      + '</tr>';
+  });
+  el.innerHTML = '<div class="table-wrap"><table>'
+    + '<thead><tr>'
+    + '<th style="width:46%">Task</th>'
+    + '<th style="width:14%">Status</th>'
+    + '<th style="width:16%">Category</th>'
+    + '<th style="width:24%">Assignees</th>'
+    + '</tr></thead>'
+    + '<tbody>' + (rows || '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text3)">No tasks found</td></tr>') + '</tbody>'
+    + '</table></div>';
 }
 
 function renderByTag() {
@@ -879,19 +752,27 @@ function renderByTag() {
   const tasks = state.tasks[state.currentTeam] || [];
   const groups = {};
   tasks.forEach(t => {
-    const tags = (t.tags||[]).map(tg=>tg.name||tg);
+    const tags = (t.tags || []).map(tg => tg.name || tg);
     const keys = tags.length ? tags : ['(uncategorized)'];
-    keys.forEach(tag => { if(!groups[tag])groups[tag]=[]; if(!groups[tag].find(x=>x.id===t.id))groups[tag].push(t); });
+    keys.forEach(tag => {
+      if (!groups[tag]) groups[tag] = [];
+      if (!groups[tag].find(x => x.id === t.id)) groups[tag].push(t);
+    });
   });
   const sorted = Object.keys(groups).sort();
-  el.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th style="width:18%">Category</th><th style="width:8%">Tasks</th><th>Items</th></tr></thead>
-    <tbody>${sorted.map(tag=>`<tr>
-      <td><span class="tag-pill" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${tag}</span></td>
-      <td style="color:var(--text2)">${groups[tag].length}</td>
-      <td><div style="display:flex;flex-wrap:wrap;gap:3px">${groups[tag].map(t=>`<a class="cat-link" href="${t.url}" target="_blank">${t.name}</a>`).join('')}</div></td>
-    </tr>`).join('')}</tbody>
-  </table></div>`;
+  let rows = '';
+  sorted.forEach(tag => {
+    const links = groups[tag].map(t => '<a class="cat-link" href="' + (t.url||'#') + '" target="_blank">' + (t.name||'') + '</a>').join('');
+    rows += '<tr>'
+      + '<td><span class="tag-pill" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">' + tag + '</span></td>'
+      + '<td style="color:var(--text2)">' + groups[tag].length + '</td>'
+      + '<td><div style="display:flex;flex-wrap:wrap;gap:3px">' + links + '</div></td>'
+      + '</tr>';
+  });
+  el.innerHTML = '<div class="table-wrap"><table>'
+    + '<thead><tr><th style="width:18%">Category</th><th style="width:8%">Tasks</th><th>Items</th></tr></thead>'
+    + '<tbody>' + (rows || '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text3)">No categories found</td></tr>') + '</tbody>'
+    + '</table></div>';
 }
 
 async function refresh() {
